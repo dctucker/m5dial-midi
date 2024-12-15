@@ -1,3 +1,7 @@
+// M5Dial MIDI application
+// Author: Casey Tucker <dctucker@hotmail.com>
+//
+
 //#include <M5Stack.h>
 #include <M5Dial.h>
 //#include <M5_SAM2695.h>
@@ -6,14 +10,100 @@
 #define MidiIn  Serial1
 //#define MidiIn Serial2
 
-long encoder_pos = 0;
-byte status, channel, cc, data_pos;
-byte shown_channel;
+template <typename T> class History {
+	public:
+		T current;
+		T previous;
+		History() : current(0) {}
+		History(T value): current(value) {}
+		void set(T value) {
+			previous = current;
+			current = value;
+		}
+		History<T>& operator=(T rhs) {
+			set(rhs);
+			return *this;
+		}
+		template <class T2>
+		History<T>& operator=( const History<T2>& rhs )
+		{
+			previous = current;
+			current = static_cast< T >( rhs );
+			return *this;
+		}
+		operator T() const { return current; }
+};
+
 typedef struct {
-	byte bank_msb, bank_lsb, pgm;
+	History<byte> bank_msb, bank_lsb, pgm;
 } ChannelProgram;
+
 ChannelProgram programs[16];
-byte frames;
+
+class MidiState {
+	private:
+		bool (*cc_handler)(byte, byte, byte);
+		bool (*pc_handler)(byte, byte);
+	public:
+		byte status, channel, cc, data_pos;
+		bool dirty;
+
+	void onControl( bool (*handler)(byte ch, byte cc, byte val) ) {
+		cc_handler = handler;
+	}
+
+	void onProgram( bool (*handler)(byte ch, byte pc) ) {
+		pc_handler = handler;
+	}
+
+	MidiState operator<<(byte const& input) {
+		dirty = false;
+		if (input & 0x80) { // status
+			status = input & 0xf0;
+			channel = input & 0x0f;
+			data_pos = 0;
+		} else { // data
+			switch(status) {
+				case 0x80: // note off
+				case 0x90: // note on
+				case 0xa0: // key pressure
+					break;
+				case 0xb0: // controller
+					switch(data_pos % 2) {
+						case 0:
+							cc = input;
+							break;
+						case 1:
+							dirty = cc_handler(channel, cc, input);
+							break;
+						default:;
+					}
+					data_pos++;
+					break;
+				case 0xc0: // program
+					dirty = pc_handler(channel, input);
+					break;
+				case 0xd0: // channel pressure
+					break;
+				case 0xe0: // pitch bend
+					break;
+				case 0xf0: // system
+					break;
+				default:;
+			}
+		} //*/
+		return *this;
+	}
+};
+
+long encoder_pos = 0;
+byte shown_channel;
+
+uint32_t frames;
+
+const uint16_t primary_color = M5Dial.Lcd.color565(255, 96, 0);
+
+MidiState midi_state;
 
 void setup() {
 	auto cfg = M5.config();
@@ -26,6 +116,19 @@ void setup() {
 	frames = 0;
 	M5Dial.Lcd.clear();
 	display();
+
+	midi_state.onControl( [](byte ch, byte cc, byte val) -> bool {
+		switch(cc){
+			case  0: programs[ch].bank_msb = val; break;
+			case 32: programs[ch].bank_lsb = val; break;
+			default: return false;
+		}
+		return true;
+	});
+	midi_state.onProgram( [](byte ch, byte val) -> bool {
+		programs[ch].pgm = val;
+		return true;
+	});
 }
 
 const int chwid = 3;
@@ -58,7 +161,7 @@ void display() {
 	M5Dial.Lcd.fillRect(x-w/2, y-h/2, w, h);
 
 	M5Dial.Lcd.setTextFont(&fonts::FreeMonoBold12pt7b);
-	M5Dial.Lcd.setTextColor(ORANGE);
+	M5Dial.Lcd.setTextColor(primary_color);
 	M5Dial.Lcd.drawString(String(p.bank_msb + 1, DEC), x, y);
 
 	M5Dial.Lcd.setTextFont(&fonts::Font0);
@@ -71,7 +174,7 @@ void display() {
 	M5Dial.Lcd.fillRect(x-w/2, y-h/2, w, h);
 
 	M5Dial.Lcd.setTextFont(&fonts::FreeMonoBold12pt7b);
-	M5Dial.Lcd.setTextColor(ORANGE);
+	M5Dial.Lcd.setTextColor(primary_color);
 	M5Dial.Lcd.drawString(String(p.bank_lsb + 1, DEC), x, y);
 
 	M5Dial.Lcd.setTextFont(&fonts::Font0);
@@ -84,8 +187,8 @@ void display() {
 	M5Dial.Lcd.fillRect(x-w/2, y-h/2, w, h);
 
 	M5Dial.Lcd.setTextFont(&fonts::FreeMonoBold12pt7b);
-	M5Dial.Lcd.setTextColor(ORANGE);
-	M5Dial.Lcd.drawString(String(p.pgm + 1, DEC), x, y);
+	M5Dial.Lcd.setTextColor(primary_color);
+	M5Dial.Lcd.drawString(String(p.pgm.current + 1, DEC), x, y);
 
 	M5Dial.Lcd.setTextFont(&fonts::Font0);
 	M5Dial.Lcd.setTextColor(DARKGREY);
@@ -98,57 +201,14 @@ void loop() {
 	bool dirty;
 	byte input;
 	dirty = false;
+	frames++;
 
 	while (MidiIn.available()) {
 		input = MidiIn.read();
+		midi_state << input;
+		dirty = dirty || midi_state.dirty;
 		//M5Dial.Speaker.tone(2000, 20);
 		///*
-		if (input & 0x80) { // status
-			status = input & 0xf0;
-			channel = input & 0x0f;
-			data_pos = 0;
-		} else { // data
-			switch(status) {
-				case 0x80: // note off
-				case 0x90: // note on
-				case 0xa0: // key pressure
-					break;
-				case 0xb0: // controller
-						   //dirty = true;
-					switch(data_pos) {
-						case 0:
-							cc = input;
-							break;
-						case 1:
-							switch(cc){
-								case 0:
-									dirty = true;
-									programs[channel].bank_msb = input;
-									break;
-								case 32:
-									dirty = true;
-									programs[channel].bank_lsb = input;
-									break;
-								default:;
-							}
-							break;
-						default:;
-					}
-					data_pos++;
-					break;
-				case 0xc0: // program
-					dirty = true;
-					programs[channel].pgm = input;
-					break;
-				case 0xd0: // channel pressure
-					break;
-				case 0xe0: // pitch bend
-					break;
-				case 0xf0: // system
-					break;
-				default:;
-			}
-		} //*/
 	}
 
 	long newpos = M5Dial.Encoder.read();
@@ -173,5 +233,10 @@ void loop() {
 
 	if (dirty) {
 		display();
+		frames = 1;
+		M5Dial.Lcd.setBrightness(127);
+	}
+	if (frames % (1<<20) == 0) {
+		M5Dial.Lcd.setBrightness(20);
 	}
 }
