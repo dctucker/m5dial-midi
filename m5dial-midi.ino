@@ -28,17 +28,10 @@ const uint16_t primary_color = M5Dial.Lcd.color565(255, 96, 0);
 
 MidiState midi_state;
 
-String midiString(History<byte> b) {
-	if (!b) {
-		return "?";
-	}
-	return String(b + 1, DEC);
-}
-
 void setup() {
 	auto cfg = M5.config();
-	MidiIn.begin(MIDI_BAUD); //, SERIAL_8N1);
-							 //MidiOut.begin(MIDI_BAUD); // , SERIAL_8N1);
+	MidiIn.begin(MIDI_BAUD);
+	//MidiOut.begin(MIDI_BAUD);
 
 	M5Dial.begin(cfg, true, false);
 	M5Dial.Lcd.setTextColor(YELLOW);
@@ -61,9 +54,48 @@ void setup() {
 	});
 }
 
+String midiString(History<byte> b) {
+	if (b.unknown()) {
+		return "-";
+	}
+	return String((int)b + 1, DEC);
+}
+
 const int chwid = 3;
 const int textw = 9;
 const int texth = 12;
+
+enum CursorState {
+	Unselected,
+	Selected,
+	Editing
+};
+
+void drawMidiValue(History<byte> value, String desc, int state, int x, int y, int w, int h) {
+	if (state != Editing) {
+		M5Dial.Lcd.setColor(BLACK);
+		M5Dial.Lcd.fillRect(x-w/2, y-h/2-1, w, h);
+	}
+	if (state == Selected) {
+		M5Dial.Lcd.setColor(LIGHTGREY);
+		M5Dial.Lcd.drawRect(x-w/2, y-h/2-1, w, h);
+	} else if (state == Editing) {
+		M5Dial.Lcd.setColor(DARKGREY);
+		M5Dial.Lcd.fillRect(x-w/2, y-h/2-1, w, h);
+	}
+
+	M5Dial.Lcd.setTextFont(&fonts::FreeMonoBold12pt7b);
+	if (state == Editing) {
+		M5Dial.Lcd.setTextColor(BLACK);
+	} else {
+		M5Dial.Lcd.setTextColor(primary_color);
+	}
+	M5Dial.Lcd.drawString(midiString(value), x, y);
+
+	M5Dial.Lcd.setTextFont(&fonts::Font0);
+	M5Dial.Lcd.setTextColor(DARKGREY);
+	M5Dial.Lcd.drawString(desc, x, y-h);
+}
 
 void display() {
 	int x, y, w, h, left;
@@ -74,57 +106,52 @@ void display() {
 
 	// ch
 	y = M5Dial.Lcd.height()/2;
-	x = 0;
-	M5Dial.Lcd.setColor(DARKGREY);
-	M5Dial.Lcd.fillRect(0, y - 16, chwid*textw+8, 32);
-
-	M5Dial.Lcd.setTextFont(&fonts::FreeMonoBold12pt7b);
-	M5Dial.Lcd.setTextColor(0x000000);
-	M5Dial.Lcd.drawString(midiString(shown_channel), 4+chwid*textw/2, M5Dial.Lcd.height()/2);
+	x = 4+chwid*textw/2;
+	h = 24;
+	w = 32;
+	drawMidiValue(shown_channel, "CH", Editing, x, y, w, h);
 	left = 4+chwid*textw;
 
+	bool scc = shown_channel.changed();
+
 	// msb
-	w = M5Dial.Lcd.width() / 4;
-	x = left + (M5Dial.Lcd.width() - left) / 4;
-	h = 24;
-	M5Dial.Lcd.setColor(0x000000);
-	M5Dial.Lcd.fillRect(x-w/2, y-h/2, w, h);
-
-	M5Dial.Lcd.setTextFont(&fonts::FreeMonoBold12pt7b);
-	M5Dial.Lcd.setTextColor(primary_color);
-	M5Dial.Lcd.drawString(midiString(p.bank_msb), x, y);
-
-	M5Dial.Lcd.setTextFont(&fonts::Font0);
-	M5Dial.Lcd.setTextColor(DARKGREY);
-	M5Dial.Lcd.drawString("MSB", x, y-h);
+	w = M5Dial.Lcd.width() / 5;
+	x = left + (M5Dial.Lcd.width() - left) / 4 + 1;
+	if (scc || p.bank_msb.changed()) {
+		drawMidiValue(p.bank_msb, "MSB", Unselected, x, y, w, h);
+	}
 
 	// lsb
-	x = left + 2 * (M5Dial.Lcd.width() - left) / 4;
-	M5Dial.Lcd.setColor(0x000000);
-	M5Dial.Lcd.fillRect(x-w/2, y-h/2, w, h);
-
-	M5Dial.Lcd.setTextFont(&fonts::FreeMonoBold12pt7b);
-	M5Dial.Lcd.setTextColor(primary_color);
-	M5Dial.Lcd.drawString(midiString(p.bank_lsb), x, y);
-
-	M5Dial.Lcd.setTextFont(&fonts::Font0);
-	M5Dial.Lcd.setTextColor(DARKGREY);
-	M5Dial.Lcd.drawString("LSB", x, y-h);
+	x = left + 2 * (M5Dial.Lcd.width() - left) / 4 + 1;
+	if (scc || p.bank_lsb.changed()) {
+		drawMidiValue(p.bank_lsb, "LSB", Unselected, x, y, w, h);
+	}
 
 	// pgm
-	x = left + 3 * (M5Dial.Lcd.width() - left) / 4;
-	M5Dial.Lcd.setColor(0x000000);
-	M5Dial.Lcd.fillRect(x-w/2, y-h/2, w, h);
-
-	M5Dial.Lcd.setTextFont(&fonts::FreeMonoBold12pt7b);
-	M5Dial.Lcd.setTextColor(primary_color);
-	M5Dial.Lcd.drawString(midiString(p.pgm), x, y);
-
-	M5Dial.Lcd.setTextFont(&fonts::Font0);
-	M5Dial.Lcd.setTextColor(DARKGREY);
-	M5Dial.Lcd.drawString("PGM", x, y-h);
+	x = left + 3 * (M5Dial.Lcd.width() - left) / 4 + 1;
+	if (scc || p.pgm.changed()) {
+		drawMidiValue(p.pgm, "PGM", Unselected, x, y, w, h);
+	}
 }
 
+void cursorDec() {
+	shown_channel.dec(16);
+}
+
+void cursorInc() {
+	shown_channel.inc(16);
+}
+
+void illuminate() {
+	frames = 1;
+	M5Dial.Lcd.setBrightness(127);
+}
+
+void dim() {
+	M5Dial.Lcd.setBrightness(20);
+}
+
+static m5::touch_state_t prev_state;
 void loop() {
 	M5Dial.update();
 
@@ -142,31 +169,46 @@ void loop() {
 	}
 
 	long newpos = M5Dial.Encoder.read();
+	if (M5Dial.BtnA.pressedFor(5000)) {
+		M5Dial.Encoder.write(100);
+		M5Dial.Speaker.tone(2000, 25);
+	}
+	if (M5Dial.BtnA.wasPressed()) {
+		//M5Dial.Encoder.readAndReset();
+		shown_channel = 0;
+		dirty = true;
+	}
 	if (newpos != encoder_pos) {
 		if (newpos % 4 == 0) {
 			M5Dial.Speaker.tone(8000, 20);
-			shown_channel += 16 + (byte)(newpos - encoder_pos);
-			shown_channel %= (byte)16;
+			auto d = newpos - encoder_pos;
+			if (d > 0) {
+				cursorInc();
+			} else if (d < 0) {
+				cursorDec();
+			}
 			dirty = true;
 		}
 		encoder_pos = newpos;
 		//M5Dial.Lcd.drawString(String(encoder_pos), M5Dial.Lcd.width()/2, M5Dial.Lcd.height()/2);
 	}
-	if (M5Dial.BtnA.wasPressed()) {
-		M5Dial.Encoder.readAndReset();
-		shown_channel = 0;
-	}
-	if (M5Dial.BtnA.pressedFor(5000)) {
-		M5Dial.Encoder.write(100);
-		M5Dial.Speaker.tone(2000, 25);
+
+	auto t = M5Dial.Touch.getDetail();
+	if (prev_state != t.state) {
+		prev_state = t.state;
+		static constexpr const char* state_name[16] = {
+			"none", "touch", "touch_end", "touch_begin",
+			"___",  "hold",  "hold_end",  "hold_begin",
+			"___",  "flick", "flick_end", "flick_begin",
+			"___",  "drag",  "drag_end",  "drag_begin"};
+		illuminate();
 	}
 
 	if (dirty) {
 		display();
-		frames = 1;
-		M5Dial.Lcd.setBrightness(127);
+		illuminate();
 	}
 	if (frames % (1<<20) == 0) {
-		M5Dial.Lcd.setBrightness(20);
+		dim();
 	}
 }
