@@ -12,6 +12,7 @@ void drawMidiValue(History<byte> value, String desc, int state, int x, int y, in
 class Widget {
 	public:
 		History<byte> *history;
+		byte m_max;
 		int x, y, w, h;
 		String m_label;
 	Widget() : history(NULL) {}
@@ -33,11 +34,28 @@ class Widget {
 		this->m_label = s;
 		return *this;
 	}
+	Widget &max(byte m) {
+		this->m_max = m;
+		return *this;
+	}
 	void display(CursorState state) {
 		if (history == NULL) return;
 		if (!history->changed()) return;
 
 		drawMidiValue(*history, m_label, state, x, y, w, h);
+	}
+	void inc() {
+		if (history == NULL) return;
+
+		history->inc(m_max);
+	}
+	void dec() {
+		if (history == NULL) return;
+
+		history->dec(m_max);
+	}
+	void forget() {
+		history->forget();
 	}
 };
 
@@ -46,7 +64,7 @@ class Page {
 		CursorState state;
 		size_t n_widgets;
 		Widget *widgets[32];
-		size_t selected;
+		History<size_t> selected;
 
 	Page() : n_widgets(0), selected(0) {}
 
@@ -60,7 +78,36 @@ class Page {
 			widgets[i]->display(st);
 		}
 	}
-	void edit() {
+	void enter() {
 		state = Editing;
+	}
+	void leave() {
+		state = Selected;
+	}
+	void toggle() {
+		currentWidget().forget();
+		if (state == Editing)
+			leave();
+		else
+			enter();
+	}
+	Widget &currentWidget() {
+		return *(this->widgets[selected]);
+	}
+	void inc() {
+		if (state == Editing) {
+			currentWidget().inc();
+		}
+		else if (state == Selected) {
+			selected.inc(n_widgets);
+		}
+	}
+	void dec() {
+		if (state == Editing) {
+			currentWidget().dec();
+		}
+		else if (state == Selected) {
+			selected.dec(n_widgets);
+		}
 	}
 };

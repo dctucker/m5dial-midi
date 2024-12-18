@@ -46,26 +46,26 @@ void setup() {
 	patchPage.add( w_msb );
 	patchPage.add( w_lsb );
 	patchPage.add( w_pgm );
-	patchPage.edit();
+	patchPage.enter();
 
 	int x, y, w, h, left;
 	x = 4+chwid*textw/2;
 	y = M5Dial.Lcd.height()/2;
 	w = 32;
 	h = 24;
-	w_ch.track(shown_channel).pos(x,y).size(w,h);
+	w_ch.max(16).track(shown_channel).pos(x,y).size(w,h);
 
 	left = 4+chwid*textw;
 
 	x = left + (M5Dial.Lcd.width() - left) / 4 + 1;
 	w = M5Dial.Lcd.width() / 5;
-	w_msb.track(programs[0].bank_msb).pos(x,y).size(w,h);
+	w_msb.max(128).track(programs[0].bank_msb).pos(x,y).size(w,h);
 
 	x = left + 2 * (M5Dial.Lcd.width() - left) / 4 + 1;
-	w_lsb.track(programs[0].bank_lsb).pos(x,y).size(w,h);
+	w_lsb.max(128).track(programs[0].bank_lsb).pos(x,y).size(w,h);
 
 	x = left + 3 * (M5Dial.Lcd.width() - left) / 4 + 1;
-	w_pgm.track(programs[0].pgm).pos(x,y).size(w,h);
+	w_pgm.max(128).track(programs[0].pgm).pos(x,y).size(w,h);
 
 
 	M5Dial.Lcd.clear();
@@ -130,19 +130,24 @@ void display() {
 }
 
 void updateChannel() {
+	shown_channel.forget();
 	w_msb.track( programs[shown_channel].bank_msb );
 	w_lsb.track( programs[shown_channel].bank_lsb );
 	w_pgm.track( programs[shown_channel].pgm );
 }
 
 void cursorDec() {
-	shown_channel.dec(16);
+	patchPage.dec();
 	updateChannel();
 }
 
 void cursorInc() {
-	shown_channel.inc(16);
+	patchPage.inc();
 	updateChannel();
+}
+
+void press() {
+	patchPage.toggle();
 }
 
 void illuminate() {
@@ -178,7 +183,7 @@ void loop() {
 	}
 	if (M5Dial.BtnA.wasPressed()) {
 		//M5Dial.Encoder.readAndReset();
-		shown_channel = 0;
+		press();
 		dirty = true;
 	}
 	if (newpos != encoder_pos) {
@@ -205,6 +210,7 @@ void loop() {
 			"___",  "flick", "flick_end", "flick_begin",
 			"___",  "drag",  "drag_end",  "drag_begin"};
 		illuminate();
+		dirty = true;
 	}
 
 	if (dirty) {
