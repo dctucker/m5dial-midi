@@ -53,19 +53,19 @@ void setup() {
 	y = M5Dial.Lcd.height()/2;
 	w = 32;
 	h = 24;
-	w_ch.max(16).track(shown_channel).pos(x,y).size(w,h);
+	w_ch.label("CH").max(16).track(shown_channel).pos(x,y).size(w,h);
 
 	left = 4+chwid*textw;
 
 	x = left + (M5Dial.Lcd.width() - left) / 4 + 1;
 	w = M5Dial.Lcd.width() / 5;
-	w_msb.max(128).track(programs[0].bank_msb).pos(x,y).size(w,h);
+	w_msb.label("MSB").max(128).track(programs[0].bank_msb).pos(x,y).size(w,h);
 
 	x = left + 2 * (M5Dial.Lcd.width() - left) / 4 + 1;
-	w_lsb.max(128).track(programs[0].bank_lsb).pos(x,y).size(w,h);
+	w_lsb.label("LSB").max(128).track(programs[0].bank_lsb).pos(x,y).size(w,h);
 
 	x = left + 3 * (M5Dial.Lcd.width() - left) / 4 + 1;
-	w_pgm.max(128).track(programs[0].pgm).pos(x,y).size(w,h);
+	w_pgm.label("PGM").max(128).track(programs[0].pgm).pos(x,y).size(w,h);
 
 
 	M5Dial.Lcd.clear();
