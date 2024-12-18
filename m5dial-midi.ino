@@ -8,6 +8,7 @@
 
 #include "MidiState.h"
 #include "History.h"
+#include "UI.h"
 
 #define MIDI_BAUD 31250
 #define MidiIn  Serial1
@@ -28,6 +29,9 @@ const uint16_t primary_color = M5Dial.Lcd.color565(255, 96, 0);
 
 MidiState midi_state;
 
+Page patchPage;
+Widget w_ch, w_msb, w_lsb, w_pgm;
+
 void setup() {
 	auto cfg = M5.config();
 	MidiIn.begin(MIDI_BAUD);
@@ -37,6 +41,33 @@ void setup() {
 	M5Dial.Lcd.setTextColor(YELLOW);
 	shown_channel = 0;
 	frames = 0;
+
+	patchPage.add( w_ch );
+	patchPage.add( w_msb );
+	patchPage.add( w_lsb );
+	patchPage.add( w_pgm );
+	patchPage.edit();
+
+	int x, y, w, h, left;
+	x = 4+chwid*textw/2;
+	y = M5Dial.Lcd.height()/2;
+	w = 32;
+	h = 24;
+	w_ch.track(shown_channel).pos(x,y).size(w,h);
+
+	left = 4+chwid*textw;
+
+	x = left + (M5Dial.Lcd.width() - left) / 4 + 1;
+	w = M5Dial.Lcd.width() / 5;
+	w_msb.track(programs[0].bank_msb).pos(x,y).size(w,h);
+
+	x = left + 2 * (M5Dial.Lcd.width() - left) / 4 + 1;
+	w_lsb.track(programs[0].bank_lsb).pos(x,y).size(w,h);
+
+	x = left + 3 * (M5Dial.Lcd.width() - left) / 4 + 1;
+	w_pgm.track(programs[0].pgm).pos(x,y).size(w,h);
+
+
 	M5Dial.Lcd.clear();
 	display();
 
@@ -52,6 +83,7 @@ void setup() {
 		programs[ch].pgm = val;
 		return true;
 	});
+
 }
 
 String midiString(History<byte> b) {
@@ -60,16 +92,6 @@ String midiString(History<byte> b) {
 	}
 	return String((int)b + 1, DEC);
 }
-
-const int chwid = 3;
-const int textw = 9;
-const int texth = 12;
-
-enum CursorState {
-	Unselected,
-	Selected,
-	Editing
-};
 
 void drawMidiValue(History<byte> value, String desc, int state, int x, int y, int w, int h) {
 	if (state != Editing) {
@@ -104,42 +126,23 @@ void display() {
 	M5Dial.Lcd.setTextDatum(middle_center);
 	M5Dial.Lcd.setTextSize(1);
 
-	// ch
-	y = M5Dial.Lcd.height()/2;
-	x = 4+chwid*textw/2;
-	h = 24;
-	w = 32;
-	drawMidiValue(shown_channel, "CH", Editing, x, y, w, h);
-	left = 4+chwid*textw;
+	patchPage.display();
+}
 
-	bool scc = shown_channel.changed();
-
-	// msb
-	w = M5Dial.Lcd.width() / 5;
-	x = left + (M5Dial.Lcd.width() - left) / 4 + 1;
-	if (scc || p.bank_msb.changed()) {
-		drawMidiValue(p.bank_msb, "MSB", Unselected, x, y, w, h);
-	}
-
-	// lsb
-	x = left + 2 * (M5Dial.Lcd.width() - left) / 4 + 1;
-	if (scc || p.bank_lsb.changed()) {
-		drawMidiValue(p.bank_lsb, "LSB", Unselected, x, y, w, h);
-	}
-
-	// pgm
-	x = left + 3 * (M5Dial.Lcd.width() - left) / 4 + 1;
-	if (scc || p.pgm.changed()) {
-		drawMidiValue(p.pgm, "PGM", Unselected, x, y, w, h);
-	}
+void updateChannel() {
+	w_msb.track( programs[shown_channel].bank_msb );
+	w_lsb.track( programs[shown_channel].bank_lsb );
+	w_pgm.track( programs[shown_channel].pgm );
 }
 
 void cursorDec() {
 	shown_channel.dec(16);
+	updateChannel();
 }
 
 void cursorInc() {
 	shown_channel.inc(16);
+	updateChannel();
 }
 
 void illuminate() {
